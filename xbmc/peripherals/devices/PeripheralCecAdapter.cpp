@@ -347,7 +347,14 @@ bool CPeripheralCecAdapter::OpenConnection(void)
 
     // read the configuration
     libcec_configuration config;
-    if (m_cecAdapter->GetCurrentConfiguration(&config))
+    int iTries = 0;
+    while (m_cecAdapter->GetCurrentConfiguration(&config) && config.baseDevice == CECDEVICE_UNKNOWN && !m_bStop && iTries < 100)
+    {
+      CThread::Sleep(100ms);
+      iTries++;
+    }
+
+    if (!m_bStop)
     {
       // update the local configuration
       std::unique_lock lock(m_critSection);
@@ -456,8 +463,10 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
 {
   bool bSendRelease(false);
   CecVolumeChange pendingVolumeChange = VOLUME_CHANGE_NONE;
+  cec_logical_address baseDevice;
   {
     std::unique_lock lock(m_critSection);
+    baseDevice = m_configuration.baseDevice;
     auto now = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastKeypress);
     if (!m_volumeChangeQueue.empty())
@@ -498,16 +507,27 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
     }
   }
 
+  // Determine the actual destination for the command
+  cec_logical_address destination = baseDevice;
+  if (baseDevice == CECDEVICE_AUDIOSYSTEM && pendingVolumeChange != VOLUME_CHANGE_NONE)
+  {
+    if (!m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
+    {
+      CLog::Log(LOGDEBUG, "{} - CEC amplifier not found, falling back to TV.", __FUNCTION__);
+      destination = CECDEVICE_TV;
+    }
+  }
+
   switch (pendingVolumeChange)
   {
     case VOLUME_CHANGE_UP:
-      m_cecAdapter->SendKeypress(CECDEVICE_AUDIOSYSTEM, CEC_USER_CONTROL_CODE_VOLUME_UP, false);
+      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_UP, false);
       break;
     case VOLUME_CHANGE_DOWN:
-      m_cecAdapter->SendKeypress(CECDEVICE_AUDIOSYSTEM, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false);
+      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false);
       break;
     case VOLUME_CHANGE_MUTE:
-      m_cecAdapter->SendKeypress(CECDEVICE_AUDIOSYSTEM, CEC_USER_CONTROL_CODE_MUTE, false);
+      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_MUTE, false);
       {
         std::unique_lock lock(m_critSection);
         m_bIsMuted = !m_bIsMuted;
@@ -515,7 +535,7 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
       break;
     case VOLUME_CHANGE_NONE:
       if (bSendRelease)
-        m_cecAdapter->SendKeyRelease(CECDEVICE_AUDIOSYSTEM, false);
+        m_cecAdapter->SendKeyRelease(destination, false);
       break;
   }
 }
@@ -1606,30 +1626,34 @@ void CPeripheralCecAdapterUpdateThread::UpdateMenuLanguage(void)
 std::string CPeripheralCecAdapterUpdateThread::UpdateAudioSystemStatus(void)
 {
   std::string strAmpName;
+  bool bTakeVolumeControl = false;
 
   /* disable the mute setting when an amp is found, because the amp handles the mute setting and
        set PCM output to 100% */
   if (m_adapter->m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
   {
+    bTakeVolumeControl = true;
     // request the OSD name of the amp
     std::string ampName(m_adapter->m_cecAdapter->GetDeviceOSDName(CECDEVICE_AUDIOSYSTEM));
     CLog::Log(LOGDEBUG,
               "{} - CEC capable amplifier found ({}). volume will be controlled on the amp",
               __FUNCTION__, ampName);
     strAmpName += ampName;
+  }
+  else
+  {
+    bTakeVolumeControl = true;
+    CLog::Log(LOGDEBUG, "{} - No CEC amplifier found, falling back to TV volume control.", __FUNCTION__);
+  }
 
-    // set amp present
-    m_adapter->SetAudioSystemConnected(true);
+  m_adapter->SetAudioSystemConnected(bTakeVolumeControl);
+
+  if (bTakeVolumeControl)
+  {
     auto& components = CServiceBroker::GetAppComponents();
     const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
     appVolume->SetMute(false);
     appVolume->SetVolume(CApplicationVolumeHandling::VOLUME_MAXIMUM, false);
-  }
-  else
-  {
-    // set amp present
-    CLog::Log(LOGDEBUG, "{} - no CEC capable amplifier found", __FUNCTION__);
-    m_adapter->SetAudioSystemConnected(false);
   }
 
   return strAmpName;
