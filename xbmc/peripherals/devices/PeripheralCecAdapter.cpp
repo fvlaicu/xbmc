@@ -518,16 +518,25 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
     }
   }
 
+  if (pendingVolumeChange != VOLUME_CHANGE_NONE)
+    CLog::Log(LOGDEBUG, "{} - Determined volume destination: {}", __FUNCTION__, (int)destination);
+
   switch (pendingVolumeChange)
   {
     case VOLUME_CHANGE_UP:
-      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_UP, false);
+      CLog::Log(LOGDEBUG, "{} - Sending VOLUME_UP to {}", __FUNCTION__, (int)destination);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_UP, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(VOLUME_UP) failed", __FUNCTION__);
       break;
     case VOLUME_CHANGE_DOWN:
-      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false);
+      CLog::Log(LOGDEBUG, "{} - Sending VOLUME_DOWN to {}", __FUNCTION__, (int)destination);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(VOLUME_DOWN) failed", __FUNCTION__);
       break;
     case VOLUME_CHANGE_MUTE:
-      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_MUTE, false);
+      CLog::Log(LOGDEBUG, "{} - Sending MUTE to {}", __FUNCTION__, (int)destination);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_MUTE, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(MUTE) failed", __FUNCTION__);
       {
         std::unique_lock lock(m_critSection);
         m_bIsMuted = !m_bIsMuted;
@@ -535,7 +544,11 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
       break;
     case VOLUME_CHANGE_NONE:
       if (bSendRelease)
-        m_cecAdapter->SendKeyRelease(destination, false);
+      {
+        CLog::Log(LOGDEBUG, "{} - Sending KEY_RELEASE to {}", __FUNCTION__, (int)destination);
+        if (!m_cecAdapter->SendKeyRelease(destination, false))
+          CLog::Log(LOGERROR, "{} - SendKeyRelease failed", __FUNCTION__);
+      }
       break;
   }
 }
