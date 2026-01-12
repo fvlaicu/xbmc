@@ -359,23 +359,11 @@ bool CPeripheralCecAdapter::OpenConnection(void)
 
     // read the configuration
     libcec_configuration config;
-    int iTries = 0;
-    while (m_cecAdapter->GetCurrentConfiguration(&config) && config.baseDevice == CECDEVICE_UNKNOWN && !m_bStop && iTries < 100)
-    {
-      CThread::Sleep(100ms);
-      iTries++;
-    }
-
-    if (config.baseDevice == CECDEVICE_UNKNOWN)
-    {
-      CLog::Log(LOGWARNING, "{} - CEC adapter failed to detect base device, defaulting to TV.", __FUNCTION__);
-      config.baseDevice = CECDEVICE_TV;
-    }
-
-    if (!m_bStop)
+    if (m_cecAdapter->GetCurrentConfiguration(&config))
     {
       // update the local configuration
       std::lock_guard lock(m_critSection);
+
       SetConfigurationFromLibCEC(config);
     }
   }
@@ -450,10 +438,10 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
 {
   bool bSendRelease(false);
   CecVolumeChange pendingVolumeChange = VOLUME_CHANGE_NONE;
-  cec_logical_address baseDevice;
+  cec_logical_address destination;
   {
     std::lock_guard lock(m_critSection);
-    baseDevice = m_configuration.baseDevice;
+    destination = m_configuration.baseDevice;
     auto now = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastKeypress);
     if (!m_volumeChangeQueue.empty())
@@ -495,26 +483,34 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
   }
 
   // Determine the actual destination for the command
-  cec_logical_address destination = baseDevice;
-  if (baseDevice == CECDEVICE_AUDIOSYSTEM && pendingVolumeChange != VOLUME_CHANGE_NONE)
+  if (pendingVolumeChange != VOLUME_CHANGE_NONE)
   {
-    if (!m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
+    if (destination == CECDEVICE_UNKNOWN)
     {
-      CLog::Log(LOGDEBUG, "{} - CEC amplifier not found, falling back to TV.", __FUNCTION__);
+      CLog::Log(LOGWARNING, "{} - CEC base device is unknown, attempting to send volume to TV.", __FUNCTION__);
       destination = CECDEVICE_TV;
     }
+    else if (destination == CECDEVICE_AUDIOSYSTEM && !m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
+    {
+      CLog::Log(LOGDEBUG, "{} - CEC amplifier not found, falling back to TV for volume.", __FUNCTION__);
+      destination = CECDEVICE_TV;
+    }
+    CLog::Log(LOGDEBUG, "{} - Determined volume destination: {}", __FUNCTION__, (int)destination);
   }
 
   switch (pendingVolumeChange)
   {
     case VOLUME_CHANGE_UP:
-      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_UP, false);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_UP, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(VOLUME_UP) failed", __FUNCTION__);
       break;
     case VOLUME_CHANGE_DOWN:
-      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(VOLUME_DOWN) failed", __FUNCTION__);
       break;
     case VOLUME_CHANGE_MUTE:
-      m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_MUTE, false);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_MUTE, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(MUTE) failed", __FUNCTION__);
       {
         std::lock_guard lock(m_critSection);
         m_bIsMuted = !m_bIsMuted;
@@ -522,7 +518,10 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
       break;
     case VOLUME_CHANGE_NONE:
       if (bSendRelease)
-        m_cecAdapter->SendKeyRelease(destination, false);
+      {
+        if (!m_cecAdapter->SendKeyRelease(destination, false))
+          CLog::Log(LOGERROR, "{} - SendKeyRelease failed", __FUNCTION__);
+      }
       break;
   }
 }
