@@ -438,9 +438,10 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
 {
   bool bSendRelease(false);
   CecVolumeChange pendingVolumeChange = VOLUME_CHANGE_NONE;
+  cec_logical_address destination;
   {
     std::lock_guard lock(m_critSection);
-
+    destination = m_configuration.baseDevice;
     auto now = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastKeypress);
     if (!m_volumeChangeQueue.empty())
@@ -481,25 +482,46 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
     }
   }
 
+  // Determine the actual destination for the command
+  if (pendingVolumeChange != VOLUME_CHANGE_NONE)
+  {
+    if (destination == CECDEVICE_UNKNOWN)
+    {
+      CLog::Log(LOGWARNING, "{} - CEC base device is unknown, attempting to send volume to TV.", __FUNCTION__);
+      destination = CECDEVICE_TV;
+    }
+    else if (destination == CECDEVICE_AUDIOSYSTEM && !m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
+    {
+      CLog::Log(LOGDEBUG, "{} - CEC amplifier not found, falling back to TV for volume.", __FUNCTION__);
+      destination = CECDEVICE_TV;
+    }
+    CLog::Log(LOGDEBUG, "{} - Determined volume destination: {}", __FUNCTION__, (int)destination);
+  }
+
   switch (pendingVolumeChange)
   {
     case VOLUME_CHANGE_UP:
-      m_cecAdapter->SendKeypress(CECDEVICE_AUDIOSYSTEM, CEC_USER_CONTROL_CODE_VOLUME_UP, false);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_UP, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(VOLUME_UP) failed", __FUNCTION__);
       break;
     case VOLUME_CHANGE_DOWN:
-      m_cecAdapter->SendKeypress(CECDEVICE_AUDIOSYSTEM, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_VOLUME_DOWN, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(VOLUME_DOWN) failed", __FUNCTION__);
       break;
     case VOLUME_CHANGE_MUTE:
-      m_cecAdapter->SendKeypress(CECDEVICE_AUDIOSYSTEM, CEC_USER_CONTROL_CODE_MUTE, false);
+      if (!m_cecAdapter->SendKeypress(destination, CEC_USER_CONTROL_CODE_MUTE, false))
+        CLog::Log(LOGERROR, "{} - SendKeypress(MUTE) failed", __FUNCTION__);
       {
         std::lock_guard lock(m_critSection);
-
         m_bIsMuted = !m_bIsMuted;
       }
       break;
     case VOLUME_CHANGE_NONE:
       if (bSendRelease)
-        m_cecAdapter->SendKeyRelease(CECDEVICE_AUDIOSYSTEM, false);
+      {
+        if (!m_cecAdapter->SendKeyRelease(destination, false))
+          CLog::Log(LOGERROR, "{} - SendKeyRelease failed", __FUNCTION__);
+      }
       break;
   }
 }
@@ -1602,30 +1624,34 @@ void CPeripheralCecAdapterUpdateThread::UpdateMenuLanguage(void) const {
 
 std::string CPeripheralCecAdapterUpdateThread::UpdateAudioSystemStatus(void) const {
   std::string strAmpName;
+  bool bTakeVolumeControl = false;
 
   /* disable the mute setting when an amp is found, because the amp handles the mute setting and
        set PCM output to 100% */
   if (m_adapter->m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
   {
+    bTakeVolumeControl = true;
     // request the OSD name of the amp
     std::string ampName(m_adapter->m_cecAdapter->GetDeviceOSDName(CECDEVICE_AUDIOSYSTEM));
     CLog::Log(LOGDEBUG,
               "{} - CEC capable amplifier found ({}). volume will be controlled on the amp",
               __FUNCTION__, ampName);
     strAmpName += ampName;
+  }
+  else
+  {
+    bTakeVolumeControl = true;
+    CLog::Log(LOGDEBUG, "{} - No CEC amplifier found, falling back to TV volume control.", __FUNCTION__);
+  }
 
-    // set amp present
-    m_adapter->SetAudioSystemConnected(true);
+  m_adapter->SetAudioSystemConnected(bTakeVolumeControl);
+
+  if (bTakeVolumeControl)
+  {
     auto& components = CServiceBroker::GetAppComponents();
     const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
     appVolume->SetMute(false);
     appVolume->SetVolume(CApplicationVolumeHandling::VOLUME_MAXIMUM, false);
-  }
-  else
-  {
-    // set amp present
-    CLog::Log(LOGDEBUG, "{} - no CEC capable amplifier found", __FUNCTION__);
-    m_adapter->SetAudioSystemConnected(false);
   }
 
   return strAmpName;
