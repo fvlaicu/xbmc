@@ -165,6 +165,8 @@ private:
   void SetMenuLanguage(const char* strLanguage) const;
   void OnTvStandby(void) const;
 
+  bool HasVolumeControllableDevice(void) const;
+
   // callbacks from libCEC
   static void CecLogMessage(void* cbParam, const CEC::cec_log_message* message);
   static void CecCommand(void* cbParam, const CEC::cec_command* command);

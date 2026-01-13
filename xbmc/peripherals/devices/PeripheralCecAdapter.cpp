@@ -435,6 +435,13 @@ bool CPeripheralCecAdapter::HasTV(void) const
   return m_bHasTV;
 }
 
+bool CPeripheralCecAdapter::HasVolumeControllableDevice(void) const
+{
+  std::lock_guard lock(m_critSection);
+
+  return m_bHasConnectedAudioSystem || m_bHasTV;
+}
+
 void CPeripheralCecAdapter::SetAudioSystemConnected(bool bSetTo)
 {
   std::lock_guard lock(m_critSection);
@@ -536,7 +543,7 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
 
 void CPeripheralCecAdapter::VolumeUp(void)
 {
-  if (HasAudioControl())
+  if (HasVolumeControllableDevice())
   {
     std::lock_guard lock(m_critSection);
 
@@ -546,7 +553,7 @@ void CPeripheralCecAdapter::VolumeUp(void)
 
 void CPeripheralCecAdapter::VolumeDown(void)
 {
-  if (HasAudioControl())
+  if (HasVolumeControllableDevice())
   {
     std::lock_guard lock(m_critSection);
 
@@ -556,7 +563,7 @@ void CPeripheralCecAdapter::VolumeDown(void)
 
 void CPeripheralCecAdapter::ToggleMute(void)
 {
-  if (HasAudioControl())
+  if (HasVolumeControllableDevice())
   {
     std::lock_guard lock(m_critSection);
 
@@ -566,7 +573,7 @@ void CPeripheralCecAdapter::ToggleMute(void)
 
 bool CPeripheralCecAdapter::IsMuted(void)
 {
-  if (HasAudioControl())
+  if (HasVolumeControllableDevice())
   {
     std::lock_guard lock(m_critSection);
 
@@ -1684,6 +1691,7 @@ bool CPeripheralCecAdapterUpdateThread::SetInitialConfiguration(void)
   // request the OSD name of the TV
   std::string strNotification;
   std::string tvName(m_adapter->m_cecAdapter->GetDeviceOSDName(CECDEVICE_TV));
+  m_adapter->m_bHasTV = !tvName.empty();
   strNotification = StringUtils::Format("{}: {}", g_localizeStrings.Get(36016), tvName);
 
   std::string strAmpName = UpdateAudioSystemStatus();
