@@ -348,7 +348,7 @@ bool CPeripheralCecAdapter::OpenConnection(void)
     // read the configuration
     libcec_configuration config;
     int iTries = 0;
-    while (m_cecAdapter->GetCurrentConfiguration(&config) && config.baseDevice == CECDEVICE_UNKNOWN && !m_bStop && iTries < 100)
+    while (m_cecAdapter->GetCurrentConfiguration(&config) && config.baseDevice == CECDEVICE_UNKNOWN && !m_bStop && iTries < 10000)
     {
       CThread::Sleep(100ms);
       iTries++;
