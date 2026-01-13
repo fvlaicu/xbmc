@@ -1692,6 +1692,7 @@ bool CPeripheralCecAdapterUpdateThread::SetInitialConfiguration(void)
   std::string strNotification;
   std::string tvName(m_adapter->m_cecAdapter->GetDeviceOSDName(CECDEVICE_TV));
   m_adapter->m_bHasTV = !tvName.empty();
+  CLog::Log(LOGDEBUG, "{} - TV OSD name: '{}', m_bHasTV: {}", __FUNCTION__, tvName, m_adapter->m_bHasTV);
   strNotification = StringUtils::Format("{}: {}", g_localizeStrings.Get(36016), tvName);
 
   std::string strAmpName = UpdateAudioSystemStatus();
