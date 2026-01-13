@@ -111,6 +111,7 @@ public:
 
   // audio control
   bool HasAudioControl(void) const;
+  bool HasTV(void) const;
   CDateTime m_ScreensaverStandbySent;
   void VolumeUp(void);
   void VolumeDown(void);
@@ -181,6 +182,7 @@ private:
   bool m_bHasButton;
   bool m_bIsReady;
   bool m_bHasConnectedAudioSystem;
+  bool m_bHasTV;
   std::string m_strMenuLanguage;
   CDateTime m_standbySent;
   std::vector<CecButtonPress> m_buttonQueue;

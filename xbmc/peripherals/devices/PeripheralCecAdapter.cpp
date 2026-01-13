@@ -112,6 +112,7 @@ void CPeripheralCecAdapter::ResetMembers(void)
   //! @todo fetch the correct initial value when system audiostatus is
   //! implemented in libCEC
   m_bIsMuted = false;
+  m_bHasTV = false;
 
   m_bGoingToStandby = false;
   m_bIsRunning = false;
@@ -425,6 +426,13 @@ bool CPeripheralCecAdapter::HasAudioControl(void) const {
   std::lock_guard lock(m_critSection);
 
   return m_bHasConnectedAudioSystem;
+}
+
+bool CPeripheralCecAdapter::HasTV(void) const
+{
+  std::lock_guard lock(m_critSection);
+
+  return m_bHasTV;
 }
 
 void CPeripheralCecAdapter::SetAudioSystemConnected(bool bSetTo)
