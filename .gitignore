@@ -249,9 +249,9 @@ cmake_install.cmake
 /tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCBroadcastReceiver.java
 /tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCInputDeviceListener.java
 /tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCOnAudioFocusChangeListener.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCOnFrameAvailableListener.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCSettingsContentObserver.java
-/tools/android/packaging/xbmc/src/org/xbmc/kodi/XBMCVideoView.java
+/tools/android/packaging/xbmc/src/org/xbmc.kodi/XBMCOnFrameAvailableListener.java
+/tools/android/packaging/xbmc/src/org/xbmc.kodi/XBMCSettingsContentObserver.java
+/tools/android/packaging/xbmc/src/org/xbmc.kodi/XBMCVideoView.java
 /tools/android/packaging/xbmc/strings.xml
 
 #/tools/depends
@@ -336,3 +336,5 @@ exclude_dll.txt
 
 # clangd index
 .cache/
+PR_TEMPLATE.md
+libcec/
