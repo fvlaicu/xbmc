@@ -347,14 +347,7 @@ bool CPeripheralCecAdapter::OpenConnection(void)
 
     // read the configuration
     libcec_configuration config;
-    int iTries = 0;
-    while (m_cecAdapter->GetCurrentConfiguration(&config) && config.baseDevice == CECDEVICE_UNKNOWN && !m_bStop && iTries < 100)
-    {
-      CThread::Sleep(100ms);
-      iTries++;
-    }
-
-    if (!m_bStop)
+    if (m_cecAdapter->GetCurrentConfiguration(&config))
     {
       // update the local configuration
       std::unique_lock lock(m_critSection);
@@ -463,10 +456,10 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
 {
   bool bSendRelease(false);
   CecVolumeChange pendingVolumeChange = VOLUME_CHANGE_NONE;
-  cec_logical_address baseDevice;
+  cec_logical_address destination;
   {
     std::unique_lock lock(m_critSection);
-    baseDevice = m_configuration.baseDevice;
+    destination = m_configuration.baseDevice;
     auto now = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastKeypress);
     if (!m_volumeChangeQueue.empty())
@@ -507,19 +500,12 @@ void CPeripheralCecAdapter::ProcessVolumeChange(void)
     }
   }
 
-  // Determine the actual destination for the command
-  cec_logical_address destination = baseDevice;
-  if (baseDevice == CECDEVICE_AUDIOSYSTEM && pendingVolumeChange != VOLUME_CHANGE_NONE)
+  // If there's no AVR, there has to be a TV right?
+  if (destination != CECDEVICE_AUDIOSYSTEM)
   {
-    if (!m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
-    {
-      CLog::Log(LOGDEBUG, "{} - CEC amplifier not found, falling back to TV.", __FUNCTION__);
-      destination = CECDEVICE_TV;
-    }
+    CLog::Log(LOGDEBUG, "{} - CEC amplifier not found, falling back to TV.", __FUNCTION__);
+    destination = CECDEVICE_TV;
   }
-
-  if (pendingVolumeChange != VOLUME_CHANGE_NONE)
-    CLog::Log(LOGDEBUG, "{} - Determined volume destination: {}", __FUNCTION__, (int)destination);
 
   switch (pendingVolumeChange)
   {
@@ -1639,13 +1625,11 @@ void CPeripheralCecAdapterUpdateThread::UpdateMenuLanguage(void)
 std::string CPeripheralCecAdapterUpdateThread::UpdateAudioSystemStatus(void)
 {
   std::string strAmpName;
-  bool bTakeVolumeControl = false;
 
   /* disable the mute setting when an amp is found, because the amp handles the mute setting and
        set PCM output to 100% */
   if (m_adapter->m_cecAdapter->IsActiveDeviceType(CEC_DEVICE_TYPE_AUDIO_SYSTEM))
   {
-    bTakeVolumeControl = true;
     // request the OSD name of the amp
     std::string ampName(m_adapter->m_cecAdapter->GetDeviceOSDName(CECDEVICE_AUDIOSYSTEM));
     CLog::Log(LOGDEBUG,
@@ -1655,19 +1639,16 @@ std::string CPeripheralCecAdapterUpdateThread::UpdateAudioSystemStatus(void)
   }
   else
   {
-    bTakeVolumeControl = true;
+    std::string tvName(m_adapter->m_cecAdapter->GetDeviceOSDName(CECDEVICE_TV));
     CLog::Log(LOGDEBUG, "{} - No CEC amplifier found, falling back to TV volume control.", __FUNCTION__);
+    strAmpName += tvName;
   }
 
-  m_adapter->SetAudioSystemConnected(bTakeVolumeControl);
-
-  if (bTakeVolumeControl)
-  {
-    auto& components = CServiceBroker::GetAppComponents();
-    const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
-    appVolume->SetMute(false);
-    appVolume->SetVolume(CApplicationVolumeHandling::VOLUME_MAXIMUM, false);
-  }
+  m_adapter->SetAudioSystemConnected(true);
+  auto& components = CServiceBroker::GetAppComponents();
+  const auto appVolume = components.GetComponent<CApplicationVolumeHandling>();
+  appVolume->SetMute(false);
+  appVolume->SetVolume(CApplicationVolumeHandling::VOLUME_MAXIMUM, false);
 
   return strAmpName;
 }
