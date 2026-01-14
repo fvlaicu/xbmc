@@ -354,12 +354,6 @@ bool CPeripheralCecAdapter::OpenConnection(void)
       iTries++;
     }
 
-    if (config.baseDevice == CECDEVICE_UNKNOWN)
-    {
-      CLog::Log(LOGWARNING, "{} - CEC adapter failed to detect base device, defaulting to TV.", __FUNCTION__);
-      config.baseDevice = CECDEVICE_TV;
-    }
-
     if (!m_bStop)
     {
       // update the local configuration
